@@ -10,8 +10,9 @@ class ContentUpdater: ObservableObject {
     var textUpdater: AnyPublisher<String, Never>
     
     init() {
+        // Replace 0.3 by 0.01 to update continously in stream response mode
         textUpdater = relay
-            .debounce(for: .seconds(0.3), scheduler: RunLoop.main)
+            .debounce(for: .seconds(0.01), scheduler: RunLoop.main)
             .eraseToAnyPublisher()
     }
     
