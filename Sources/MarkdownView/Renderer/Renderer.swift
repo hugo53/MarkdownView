@@ -9,6 +9,9 @@ struct Renderer: MarkupVisitor {
     // Handle text changes when toggle checkmarks.
     var interactiveEditHandler: (String) -> Void
     
+    var blockDirectiveRenderer: BlockDirectiveRenderer
+    var imageRenderer: ImageRenderer
+    
     mutating func representedView(parseBlockDirectives: Bool) -> AnyView {
         let options: ParseOptions = parseBlockDirectives ? [.parseBlockDirectives] : []
         return visit(Document(parsing: text, options: options)).content.eraseToAnyView()
@@ -54,7 +57,7 @@ struct Renderer: MarkupVisitor {
         if isText {
             var attributer = LinkAttributer(
                 tint: configuration.inlineCodeTintColor,
-                font: configuration.fontProvider.body
+                font: configuration.fontGroup.body
             )
             let link = attributer.visit(link)
             return Result(SwiftUI.Text(link))
@@ -73,7 +76,7 @@ struct Renderer: MarkupVisitor {
             }
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .font(configuration.fontProvider.blockQuote)
+            .font(configuration.fontGroup.blockQuote)
             .padding(.horizontal, 20)
             .background {
                 configuration.blockQuoteTintColor
@@ -88,7 +91,6 @@ struct Renderer: MarkupVisitor {
     }
 
     mutating func visitImage(_ image: Markdown.Image) -> Result {
-        let renderer = ImageRenderer.shared
         guard let source = URL(string: image.source ?? "") else {
             return Result(SwiftUI.Text(image.plainText))
         }
@@ -107,7 +109,7 @@ struct Renderer: MarkupVisitor {
         
         var provider: (any ImageDisplayable)?
         if let scheme = source.scheme {
-            renderer.imageProviders.forEach { key, value in
+            imageRenderer.imageProviders.forEach { key, value in
                 if scheme.lowercased() == key.lowercased() {
                     provider = value
                     return
@@ -115,7 +117,7 @@ struct Renderer: MarkupVisitor {
             }
         }
         
-        return Result(renderer.loadImage(provider, url: source, alt: alt))
+        return Result(imageRenderer.loadImage(provider, url: source, alt: alt))
     }
 }
 

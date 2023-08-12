@@ -5,20 +5,25 @@ import Combine
 /// A view to render markdown text.
 public struct MarkdownView: View {
     @Binding private var text: String
+    var baseURL: URL?
 
     @State private var viewSize = CGSize.zero
     @State private var scrollViewRef = ScrollProxyRef.shared
     
+    @Environment(\.markdownRenderingMode) private var renderingMode
     @Environment(\.lineSpacing) private var lineSpacing
-    @Environment(\.markdownFont) private var fontProvider
+    @Environment(\.fontGroup) private var fontGroup
     @Environment(\.markdownViewRole) private var role
     @Environment(\.codeHighlighterTheme) private var codeHighlighterTheme
     @Environment(\.inlineCodeBlockTint) private var inlineTintColor
     @Environment(\.blockQuoteTint) private var blockQuoteTintColor
+    @Environment(\.foregroundStyleGroup) private var foregroundStyleGroup
+    @Environment(\.blockDirectiveRenderer) private var blockDirectiveRenderer
+    @Environment(\.imageRenderer) private var imageRenderer
     
     // Update content 0.3s after the user stops entering.
     @StateObject private var contentUpdater = ContentUpdater()
-    @State private var representedView = AnyView(Color.black.opacity(0.001)) // RenderedView
+    @State private var representedView = AnyView(EmptyView()) // RenderedView
     
     /// Parse the Markdown and render it as a single `View`.
     /// - Parameters:
@@ -27,7 +32,7 @@ public struct MarkdownView: View {
     public init(text: Binding<String>, baseURL: URL? = nil) {
         _text = text
         if let baseURL {
-            ImageRenderer.shared.baseURL = baseURL
+            self.baseURL = baseURL
         }
     }
     
@@ -38,7 +43,7 @@ public struct MarkdownView: View {
     public init(text: String, baseURL: URL? = nil) {
         _text = .constant(text)
         if let baseURL {
-            ImageRenderer.shared.baseURL = baseURL
+            self.baseURL = baseURL
         }
     }
     
@@ -57,15 +62,23 @@ public struct MarkdownView: View {
         .sizeOfView($viewSize)
         .containerSize(viewSize)
         .updateCodeBlocksWhenColorSchemeChanges()
-        // Set default font.
-        .font(fontProvider.body)
-        // Push current text, waiting for next update.
-        .onChange(of: text, perform: contentUpdater.push(_:))
+        .font(fontGroup.body) // Default font
+        .if(renderingMode == .optimized) { content in
+            content
+                // Received a debouncedText, we need to reload MarkdownView.
+                .onReceive(contentUpdater.textUpdater, perform: makeView(text:))
+                // Push current text, waiting for next update.
+                .onChange(of: text, perform: contentUpdater.push(_:))
+        }
+        .if(renderingMode == .immediate) { content in
+            content
+                // Immediately update MarkdownView when text changes.
+                .onChange(of: text, perform: makeView(text:))
+        }
         // Load view immediately after the first launch.
         // Receive configuration changes and reload MarkdownView to fit.
         .task(id: configuration) { makeView(text: text) }
-        // Received a debouncedText, we need to reload MarkdownView.
-        .onReceive(contentUpdater.textUpdater, perform: makeView(text:))
+        .task(id: baseURL) { imageRenderer.baseURL = baseURL ?? imageRenderer.baseURL }
     }
     
     private func makeView(text: String) {
@@ -78,9 +91,11 @@ public struct MarkdownView: View {
                         self.text = text
                         self.makeView(text: text)
                     }
-                }
+                },
+                blockDirectiveRenderer: blockDirectiveRenderer,
+                imageRenderer: imageRenderer
             )
-            let parseBD = !BlockDirectiveRenderer.shared.blockDirectiveProviders.isEmpty
+            let parseBD = !blockDirectiveRenderer.providers.isEmpty
             return renderer.representedView(parseBlockDirectives: parseBD)
         }
         
@@ -96,7 +111,8 @@ extension MarkdownView {
             lineSpacing: lineSpacing,
             inlineCodeTintColor: inlineTintColor,
             blockQuoteTintColor: blockQuoteTintColor,
-            fontProvider: fontProvider,
+            fontGroup: fontGroup,
+            foregroundStyleGroup: foregroundStyleGroup,
             codeBlockTheme: codeHighlighterTheme
         )
     }

@@ -14,7 +14,9 @@ struct RendererConfiguration: Equatable {
     var componentSpacing: CGFloat = 8
     var inlineCodeTintColor: Color
     var blockQuoteTintColor: Color
-    var fontProvider: MarkdownFontProvider
+    
+    var fontGroup: AnyMarkdownFontGroup
+    var foregroundStyleGroup: AnyMarkdownForegroundStyleGroup
     
     /// Sets the theme of the code block.
     /// For more information, please check out [raspu/Highlightr](https://github.com/raspu/Highlightr) .
